@@ -104,7 +104,7 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # 6) JobQueue: Gửi tin tự động (3 giờ/lần)
 async def setup_jobs(application: Application):
     job_queue = application.job_queue
-    job_queue.run_repeating(auto_send_news, interval=15, first=10)  # Chạy thử mỗi 15 giây (có thể chỉnh về 3 giờ)
+    job_queue.run_repeating(auto_send_news, interval=10800, first=10)  # Chạy thử mỗi 15 giây (có thể chỉnh về 3 giờ)
 
 # 7) Cấu hình & chạy bot
 app = ApplicationBuilder().token(TOKEN).post_init(setup_jobs).build()
