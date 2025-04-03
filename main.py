@@ -24,11 +24,7 @@ def get_news_coin68():
         
         articles = soup.find_all('div', {'class': 'MuiBox-root css-fv3lde'})
 
-<<<<<<< HEAD
-        for idx, article in enumerate(articles[:10], start=1):  # Lấy 5 tin
-=======
         for idx, article in enumerate(articles[:5], start=1):  # Lấy 5 tin
->>>>>>> 3b8211d (update 5s get news)
             link_tag = article.find('a', href=True)
             title_tag = article.find('span', {'class': 'MuiTypography-root MuiTypography-metaSemi css-1dk5p1t'})
 
@@ -59,11 +55,7 @@ def get_news_allinstation():
 
         articles = soup.find_all('div', {'class': 'col post-item'})
 
-<<<<<<< HEAD
-        for idx, article in enumerate(articles[:10], start=6):  # Lấy 5 tin
-=======
         for idx, article in enumerate(articles[:5], start=6):  # Lấy 5 tin
->>>>>>> 3b8211d (update 5s get news)
             title_tag = article.find('h3', {'class': 'post-title is-large'})
             link_tag = article.find('a', href=True)
 
