@@ -5,6 +5,9 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Appli
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, time
+from datetime import time, timedelta, datetime
+from zoneinfo import ZoneInfo
+from datetime import datetime, timezone
 
 CHAT_ID = None
 load_dotenv()
@@ -82,15 +85,23 @@ async def auto_send_news(context: ContextTypes.DEFAULT_TYPE) -> None:
         print("⚠️ Chưa có CHAT_ID, bot chưa được sử dụng trong nhóm!")
         return
 
-    now = datetime.now().time()
-    if time(9, 0) <= now <= time(22, 0):
+    # Lấy giờ UTC, +7 giờ để ra giờ VN
+    now_utc = datetime.now(timezone.utc)
+    now_vn = now_utc + timedelta(hours=7)  # Giả sử bạn ở UTC+7
+
+    # Chỉ gửi tin trong khoảng 9:00 - 22:00 giờ VN
+    if time(9, 0) <= now_vn.time() <= time(22, 0):
         news_message = get_all_news()
         try:
-            await context.bot.send_message(chat_id=CHAT_ID, text=news_message, parse_mode="Markdown")
+            await context.bot.send_message(
+                chat_id=CHAT_ID, 
+                text=news_message, 
+                parse_mode="Markdown"
+            )
         except Exception as e:
             print(f"❌ Lỗi gửi tin: {e}")
     else:
-        print("⏳ Ngoài giờ gửi tin (09:00 - 22:00), bỏ qua...")
+        print(f"⏳ {now_vn.strftime('%H:%M')} - Ngoài giờ gửi tin (09:00 - 22:00), bỏ qua...")
 
 # 5) Lệnh /news để lấy tin
 async def news(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
