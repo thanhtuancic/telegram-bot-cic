@@ -25,8 +25,9 @@ logger = logging.getLogger(__name__)
 # Biến toàn cục
 CHAT_ID = None
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or "YOUR_DUMMY_TOKEN_FOR_LOCAL_DEBUG"
+telegram_application_instance = None
 
-# Hàm lấy tin tức từ Coin68 (bất đồng bộ)
+# Hàm lấy tin tức từ Coin68
 async def get_news_coin68():
     news_list = ["🗞️ *Tin tức từ Coin68*:"]
     url = "https://coin68.com/"
@@ -50,7 +51,7 @@ async def get_news_coin68():
         logger.error(f"❌ Error fetching Coin68: {e}")
     return "\n".join(news_list) if len(news_list) > 1 else "Không tìm thấy tin tức từ Coin68!"
 
-# Hàm lấy tin tức từ Allinstation (bất đồng bộ)
+# Hàm lấy tin tức từ Allinstation
 async def get_news_allinstation():
     news_list = ["🗞️ *Tin tức từ Allinstation*:"]
     url = "https://allinstation.com/tin-tuc/"
@@ -70,7 +71,7 @@ async def get_news_allinstation():
         logger.error(f"❌ Error fetching Allinstation: {e}")
     return "\n".join(news_list) if len(news_list) > 1 else "Không tìm thấy tin tức từ Allinstation!"
 
-# Gộp tin tức từ cả hai nguồn
+# Gộp tin tức
 async def get_all_news():
     coin68_news = await get_news_coin68()
     allin_news = await get_news_allinstation()
@@ -123,7 +124,6 @@ async def setup_jobs(application: Application):
 
 # Flask app
 app_flask = Flask(__name__)
-telegram_application_instance = None
 
 # Health check endpoint
 @app_flask.route("/news", methods=["GET", "HEAD"])
@@ -158,8 +158,8 @@ async def set_webhook(webhook_host):
             if not response.get("ok"):
                 logger.error(f"Failed to set webhook: {response}")
 
-# Hàm khởi động bot
-async def start_bot():
+# Hàm khởi tạo bot
+async def init_bot():
     global telegram_application_instance
     telegram_application_instance = (
         ApplicationBuilder().token(TOKEN).post_init(setup_jobs).build()
@@ -182,16 +182,16 @@ async def start_bot():
         logger.warning("⚠️ No RENDER_EXTERNAL_HOSTNAME set, skipping webhook setup")
 
 def main():
+    global telegram_application_instance
     WEBHOOK_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
     PORT = int(os.getenv("PORT", "10000"))
 
     if WEBHOOK_HOST:
         logger.info(f"🚀 Starting bot with webhook on port {PORT}")
-        # Chạy start_bot trong event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(start_bot())
+        # Khởi tạo bot bất đồng bộ
+        asyncio.run(init_bot())
         # Chạy Flask server
+        logger.info(f"Starting Flask server on http://0.0.0.0:{PORT}")
         serve(app_flask, host="0.0.0.0", port=PORT)
     else:
         logger.info("💻 Running bot in polling mode")
