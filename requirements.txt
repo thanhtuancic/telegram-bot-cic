@@ -1,6 +1,6 @@
-python-telegram-bot[job_queue,webhooks]==20.0
-requests
-beautifulsoup4
-python-dotenv
-Flask[async]      
-waitress    
+python-telegram-bot[job_queue,webhooks]>=21.2
+beautifulsoup4>=4.12.3
+python-dotenv>=1.0.1
+flask[async]>=3.0.3
+waitress>=2.1.2
+aiohttp>=3.9.5
