@@ -182,6 +182,10 @@ def main() -> None:
         logger.info(f"🚀 Triển khai bot với Webhook. Lắng nghe trên port: {PORT}")
         logger.info(f"   Webhook URL đầy đủ: https://{WEBHOOK_HOST}/news")
         
+        # === Dòng MỚI: Khởi tạo Application instance ===
+        telegram_application_instance.initialize() # BẮT BUỘC GỌI KHI SỬ DỤNG run_webhook TRONG CÁC TÍCH HỢP KIỂU NÀY
+        # ===============================================
+
         # Chạy Flask app với waitress
         serve(app_flask, host="0.0.0.0", port=PORT)
 
