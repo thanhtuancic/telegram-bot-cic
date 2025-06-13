@@ -2,8 +2,8 @@ from telegram import Update
 import os
 # from dotenv import load_dotenv # Không cần dùng load_dotenv khi deploy lên Render vì biến môi trường được set trực tiếp
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Application, MessageHandler, filters
-from telegram.ext import WebhookHandler # Import thêm WebhookHandler
-from telegram.ext.filters import MessageFilter # Import thêm MessageFilter nếu cần
+# from telegram.ext import WebhookHandler # DÒNG NÀY ĐÃ BỊ XÓA HOẶC COMMENT OUT
+# from telegram.ext.filters import MessageFilter # DÒNG NÀY CŨNG ĐÃ BỊ XÓA HOẶC COMMENT OUT
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, time, timedelta, timezone
@@ -138,22 +138,8 @@ async def setup_jobs(application: Application):
 # 7) PHẦN QUAN TRỌNG CẦN SỬA ĐỂ CHẠY TRÊN RENDER HOẶC CỤC BỘ
 # =========================================================================
 
-# Thêm một handler cho các yêu cầu GET/HEAD từ các dịch vụ như UptimeRobot
-# telegram.ext không có trực tiếp Handler cho GET/HEAD requests,
-# bạn cần tạo một HTTP server tùy chỉnh hoặc sử dụng thư viện như aiohttp (đã có trong [webhooks] extra)
-# Tuy nhiên, cách đơn giản nhất là dựa vào cách ptb xử lý WebhookHandler
-# để đảm bảo nó vẫn đáp ứng được HTTP 200 OK cho các request không phải POST.
-# Nếu bạn không nhận được lỗi "No open ports detected" nữa,
-# có thể lỗi 405 đến từ việc PTB chỉ cho phép POST method trên đường dẫn đó.
-# Chúng ta sẽ dùng một phương pháp đơn giản hơn là tạo một HTTP server cơ bản bên ngoài.
-
-# Cần một micro-framework như Flask hoặc FastAPI nếu bạn muốn tự xử lý GET/HEAD requests
-# Tuy nhiên, python-telegram-bot[webhooks] đã bao gồm aiohttp.
-# Ta sẽ dùng phương pháp tích hợp với Flask để tạo một HTTP endpoint riêng cho health check.
-
-# CẬP NHẬT CÁCH CHẠY MAIN ĐỂ THÊM HTTP SERVER RIÊNG BIỆT CHO HEALTH CHECK
-
 from flask import Flask, request, jsonify # Thêm import Flask
+from waitress import serve # Import waitress
 
 # Tạo một Flask app riêng để xử lý các request HTTP không phải từ Telegram
 app_flask = Flask(__name__)
@@ -161,29 +147,33 @@ app_flask = Flask(__name__)
 # Endpoint cho UptimeRobot hoặc Health Check
 @app_flask.route("/news", methods=['GET', 'HEAD'])
 def health_check():
-    # logger.info(f"Received health check request: {request.method} {request.url}")
+    logger.info(f"Received health check request: {request.method} {request.url}")
     return "OK", 200 # Trả về 200 OK cho các yêu cầu GET/HEAD
 
-# Endpoint cho Telegram Webhook (POST requests)
-# Flask sẽ chuyển tiếp các request POST về hàm xử lý của telegram-bot
+# Biến toàn cục để lưu trữ telegram Application instance
+telegram_application_instance = None 
+
 @app_flask.route("/news", methods=['POST'])
 async def telegram_webhook():
-    # logger.info(f"Received Telegram webhook request: {request.method} {request.url}")
-    update = Update.de_json(request.get_json(force=True), telegram_application.bot)
-    await telegram_application.process_update(update)
-    return "OK", 200
+    logger.info(f"Received Telegram webhook request: {request.method} {request.url}")
+    if telegram_application_instance:
+        update = Update.de_json(request.get_json(force=True), telegram_application_instance.bot)
+        await telegram_application_instance.process_update(update)
+        return "OK", 200
+    else:
+        logger.error("Telegram Application instance not initialized.")
+        return "Internal Server Error", 500
 
-telegram_application = None # Biến toàn cục để lưu trữ telegram Application
 
 def main() -> None:
-    global telegram_application # Khai báo sử dụng biến toàn cục
+    global telegram_application_instance # Khai báo sử dụng biến toàn cục
     # Khi chạy cục bộ, bạn có thể bỏ comment dòng dưới này:
     # load_dotenv() 
 
-    telegram_application = ApplicationBuilder().token(TOKEN).post_init(setup_jobs).build()
+    telegram_application_instance = ApplicationBuilder().token(TOKEN).post_init(setup_jobs).build()
 
-    telegram_application.add_handler(CommandHandler("news", news))
-    telegram_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, news)) # Thêm handler cho tin nhắn text thông thường
+    telegram_application_instance.add_handler(CommandHandler("news", news))
+    telegram_application_instance.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, news)) # Thêm handler cho tin nhắn text thông thường
 
     WEBHOOK_HOST = os.getenv("RENDER_EXTERNAL_HOSTNAME")
     PORT = int(os.environ.get("PORT", "8443"))
@@ -191,32 +181,13 @@ def main() -> None:
     if WEBHOOK_HOST:
         logger.info(f"🚀 Triển khai bot với Webhook. Lắng nghe trên port: {PORT}")
         logger.info(f"   Webhook URL đầy đủ: https://{WEBHOOK_HOST}/news")
-
-        # Chạy cả Flask app và telegram_application trong cùng một tiến trình
-        # Sử dụng waitress làm WSGI server (phù hợp với môi trường production)
-        # hoặc gunicorn. Cần thêm waitress vào requirements.txt
-        # Bắt buộc phải thêm waitress vào requirements.txt:
-        # python-telegram-bot[job_queue,webhooks]==20.0
-        # requests
-        # beautifulsoup4
-        # python-dotenv
-        # Flask
-        # waitress # THÊM DÒNG NÀY
-
-        from waitress import serve # Import waitress
-
-        # Khởi tạo Flask app với WSGI handler của PTB
-        # ptb_webhook_handler = telegram_application.updater.dispatcher.get_handler() # Đây là cách cũ
-        # Với PTB 20+, run_webhook đã tự lo phần này rồi.
-        # Chúng ta cần tích hợp Flask và PTB.
-        # Cách đơn giản nhất là Flask sẽ lắng nghe POST requests và gọi process_update của PTB.
-
-        # Đây là cấu hình cho Flask để lắng nghe, và PTB sẽ xử lý Telegram updates
+        
+        # Chạy Flask app với waitress
         serve(app_flask, host="0.0.0.0", port=PORT)
 
     else:
         logger.info("💻 Chạy bot ở chế độ Polling (chế độ phát triển cục bộ).")
-        telegram_application.run_polling(allowed_updates=Update.ALL_TYPES)
+        telegram_application_instance.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     main()
