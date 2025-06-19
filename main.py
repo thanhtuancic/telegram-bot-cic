@@ -7,7 +7,9 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     Application,
+    ApplicationHandlerStop,
 )
+from telegram.error import Conflict
 from bs4 import BeautifulSoup
 from datetime import datetime, time, timedelta, timezone
 
@@ -119,6 +121,13 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         logger.error(f"❌ Lỗi gửi tin nhắn: {e}")
 
+# Error handler
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error(f"❌ Lỗi: {context.error}")
+    if isinstance(context.error, Conflict):
+        logger.error("Xung đột getUpdates, chỉ một instance bot được phép chạy!")
+        raise ApplicationHandlerStop
+
 # Thiết lập JobQueue
 async def setup_jobs(application: Application):
     application.job_queue.run_repeating(auto_send_news, interval=10800, first=10)
@@ -129,6 +138,7 @@ def main():
     app = ApplicationBuilder().token(TOKEN).post_init(setup_jobs).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("news", news))
+    app.add_error_handler(error_handler)
     logger.info("🚀 Bot đang khởi động ở chế độ polling...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
