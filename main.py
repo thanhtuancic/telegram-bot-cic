@@ -13,6 +13,8 @@ from telegram.error import Conflict, TelegramError
 from bs4 import BeautifulSoup
 from datetime import datetime, time, timedelta, timezone
 from flask import Flask
+import threading
+import asyncio
 
 # Cấu hình logging
 logging.basicConfig(
@@ -29,10 +31,10 @@ if not TOKEN:
     logger.error("⚠️ Lỗi: Chưa có TELEGRAM_BOT_TOKEN trong biến môi trường!")
     raise ValueError("TELEGRAM_BOT_TOKEN không được thiết lập!")
 
-# Khởi tạo Flask (chỉ để Render phát hiện cổng)
+# Khởi tạo Flask
 app_http = Flask(__name__)
 
-# Route đơn giản để giữ Web Service sống
+# Route đơn giản cho health check
 @app_http.route('/')
 def health_check():
     logger.info("✅ Health check received")
@@ -153,13 +155,12 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.error(f"Lỗi Telegram: {context.error.message}")
     raise context.error
 
-# Cấu hình & chạy bot
-def main():
-    # Chạy Flask trên cổng Render cung cấp
+# Chạy Flask và polling đồng thời
+def run_flask():
     port = int(os.getenv("PORT", 8080))
     app_http.run(host="0.0.0.0", port=port, threaded=True)
 
-    # Khởi động bot polling trong thread riêng
+def run_bot():
     app = ApplicationBuilder().token(TOKEN).post_init(setup_jobs).build()
     app.add_handler(CommandHandler("news", news))
     app.add_error_handler(error_handler)
@@ -171,4 +172,12 @@ def main():
         raise
 
 if __name__ == "__main__":
-    main()
+    # Chạy Flask và bot trong các thread riêng
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+
+    flask_thread.start()
+    bot_thread.start()
+
+    flask_thread.join()
+    bot_thread.join()
